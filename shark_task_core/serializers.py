@@ -34,6 +34,29 @@ class LinkInfoSerializer(serializers.Serializer):
     linked_task = ShortTaskSerializer()
 
 
+class CreateTaskTypeSerializer(serializers.Serializer):
+    name = serializers.IntegerField()
+    description = serializers.CharField()
+
+
+class UpdateTaskTypeSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False)
+    description = serializers.CharField(required=False)
+
+
+class TaskTypeSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    description = StatusSerializer()
+    created = serializers.DateTimeField()
+    updated = serializers.DateTimeField()
+
+
+class ShortTaskTypeSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+
+
 class CreateTaskSerializer(serializers.Serializer):
     project_id = serializers.IntegerField()
     task_type_id = serializers.IntegerField()

@@ -17,6 +17,24 @@ from shark_task_core.serializers import (
     UpdateTaskSerializer,
 )
 from shark_task_core.task_manager import CreateTaskInfo, TaskManager, UpdateTaskInfo
+from shark_task_core.task_type_manager import TaskTypeManager
+
+
+class TaskTypeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, task_type_id=None):
+        if not task_type_id:
+            return self.list(request)
+
+        task_type_manager = TaskTypeManager()
+        task_type_info = task_type_manager.get(task_type_id)
+        return Response(task_type_info)
+
+    def list(self, request):
+        task_type_manager = TaskTypeManager()
+        task_types = task_type_manager.get_list()
+        return Response(task_types)
 
 
 class TaskView(APIView):
@@ -48,10 +66,18 @@ class TaskView(APIView):
             print(e)
             raise e
 
-    def get(self, request, task_id):
+    def get(self, request, task_id=None):
+        if not task_id:
+            return self.list(request)
+
         task_manager = TaskManager()
         task_info = task_manager.get(task_id)
         return Response(TaskSerializer(task_info.dict()).data)
+
+    def list(self, request):
+        task_manager = TaskManager()
+        tasks = task_manager.get_list()
+        return Response(ShortTaskSerializer([task_info.dict() for task_info in tasks], many=True).data)
 
     def delete(self, request, task_id):
         try:

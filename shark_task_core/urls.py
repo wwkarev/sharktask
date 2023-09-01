@@ -1,8 +1,17 @@
 from django.urls import path
 
-from shark_task_core.views import LinkTypeView, LinkView, TaskView, filter_tasks, get_task_events
+from shark_task_core.views import (
+    LinkTypeView,
+    LinkView,
+    TaskTypeView,
+    TaskView,
+    filter_tasks,
+    get_task_events,
+)
 
 urlpatterns = [
+    path("task_type/", TaskTypeView.as_view(), name="task_type_views"),
+    path("task_type/<int:task_type_id>/", TaskTypeView.as_view(), name="task_type_views"),
     path("task/", TaskView.as_view(), name="task_views"),
     path("task/<int:task_id>/", TaskView.as_view(), name="task_views"),
     path("filter_tasks/", filter_tasks, name="filter_task_view"),

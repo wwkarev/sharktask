@@ -23,4 +23,6 @@ urlpatterns = [
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("admin/", admin.site.urls),
     path("core/", include("shark_task_core.urls")),
+    path("task_info/", include("shark_task_fields.urls")),
+    path("task_workflow/", include("shark_task_workflow.urls")),
 ]

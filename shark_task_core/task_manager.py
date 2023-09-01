@@ -170,6 +170,10 @@ class TaskManager:
         )
         return self._get(task)
 
+    def get_list(self) -> list[ShortTaskInfo]:
+        tasks = Task.objects.all().order_by("-created")
+        return [self._get_short(task) for task in tasks]
+
     def filter_task(self, project_id: int) -> list[ShortTaskInfo]:
         tasks = Task.objects.filter(project_schema__project_id=project_id).order_by("-created")
         return [self._get_short(task) for task in tasks]
