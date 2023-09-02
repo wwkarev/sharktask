@@ -2,9 +2,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.viewsets import ModelViewSet
 
 from shark_task_core.link_manager import LinkManager
-from shark_task_core.models import LinkType, TaskEvent
+from shark_task_core.models import LinkType, TaskEvent, TaskType
 from shark_task_core.serializers import (
     CreateLinkSerializer,
     CreateTaskSerializer,
@@ -12,29 +13,25 @@ from shark_task_core.serializers import (
     LinkTypeSerializer,
     RequestTaskListSerializer,
     ShortTaskSerializer,
+    ShortTaskTypeSerializer,
     TaskEventSerializer,
     TaskSerializer,
+    TaskTypeSerializer,
     UpdateTaskSerializer,
 )
 from shark_task_core.task_manager import CreateTaskInfo, TaskManager, UpdateTaskInfo
-from shark_task_core.task_type_manager import TaskTypeManager
 
 
-class TaskTypeView(APIView):
+class TaskTypeViewSet(ModelViewSet):
+    queryset = TaskType.objects.all()
+    serializer_class = TaskTypeSerializer
+    list_serializer = ShortTaskTypeSerializer
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, task_type_id=None):
-        if not task_type_id:
-            return self.list(request)
+    def list(self, request, *args, **kwargs):
+        self.serializer_class = self.list_serializer
 
-        task_type_manager = TaskTypeManager()
-        task_type_info = task_type_manager.get(task_type_id)
-        return Response(task_type_info)
-
-    def list(self, request):
-        task_type_manager = TaskTypeManager()
-        task_types = task_type_manager.get_list()
-        return Response(task_types)
+        return super().list(request, *args, **kwargs)
 
 
 class TaskView(APIView):

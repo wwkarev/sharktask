@@ -1,17 +1,20 @@
 from django.urls import path
+from rest_framework.routers import SimpleRouter
 
 from shark_task_core.views import (
     LinkTypeView,
     LinkView,
-    TaskTypeView,
+    TaskTypeViewSet,
     TaskView,
     filter_tasks,
     get_task_events,
 )
 
+router = SimpleRouter()
+
+router.register("task_type", TaskTypeViewSet, "task_type_views")
+
 urlpatterns = [
-    path("task_type/", TaskTypeView.as_view(), name="task_type_views"),
-    path("task_type/<int:task_type_id>/", TaskTypeView.as_view(), name="task_type_views"),
     path("task/", TaskView.as_view(), name="task_views"),
     path("task/<int:task_id>/", TaskView.as_view(), name="task_views"),
     path("filter_tasks/", filter_tasks, name="filter_task_view"),
@@ -19,4 +22,4 @@ urlpatterns = [
     path("link_type/", LinkTypeView.as_view(), name="link_type_view"),
     path("link/", LinkView.as_view(), name="link_view"),
     path("link/<int:link_id>/", LinkView.as_view(), name="link_view"),
-]
+] + router.urls
