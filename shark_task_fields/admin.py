@@ -51,6 +51,7 @@ class FieldAdmin(admin.ModelAdmin):
 class ScreenFieldInline(admin.TabularInline):
     model = models.ScreenField
     extra = 0
+    ordering = ("priority",)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "field":

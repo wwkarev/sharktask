@@ -59,11 +59,29 @@ class Task(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
 
+class TaskEventType:
+    TASK_CREATED = "TASK_CREATED"
+    TASK_UPDATED = "TASK_UPDATED"
+    SUMMARY_UPDATED = "SUMMARY_UPDATED"
+    STATUS_UPDATED = "STATUS_UPDATED"
+    LINK_CREATED = "LINK_CREATED"
+    LINK_DELETED = "LINK_DELETED"
+    CHOICES = (
+        (TASK_CREATED, TASK_CREATED),
+        (TASK_UPDATED, TASK_UPDATED),
+        (SUMMARY_UPDATED, SUMMARY_UPDATED),
+        (STATUS_UPDATED, STATUS_UPDATED),
+        (LINK_CREATED, LINK_CREATED),
+        (LINK_DELETED, LINK_DELETED),
+    )
+
+
 class TaskEvent(models.Model):
+    type = models.CharField(max_length=128, choices=TaskEventType.CHOICES)
     task = models.ForeignKey(Task, related_name="task_events", on_delete=models.PROTECT)
-    name = models.CharField(max_length=128)
-    old_value = models.TextField(null=True, blank=True)
-    new_value = models.TextField(null=True, blank=True)
+    field = models.JSONField(null=True, blank=True)
+    old_value = models.JSONField(null=True, blank=True)
+    new_value = models.JSONField(null=True, blank=True)
     user = models.ForeignKey(User, related_name="shark_task_events", on_delete=models.PROTECT)
     created = models.DateTimeField(auto_now_add=True)
 

@@ -47,6 +47,7 @@ class ScreenField(models.Model):
     screen = models.ForeignKey(Screen, related_name="screen_field_schemas", on_delete=models.PROTECT)
     field = models.ForeignKey(Field, related_name="screen_field_schemas", on_delete=models.PROTECT)
     is_required = models.BooleanField()
+    priority = models.IntegerField(default=100)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
@@ -55,3 +56,23 @@ class ScreenField(models.Model):
             "screen",
             "field",
         )
+
+    def save(self, no_priority_update=False, *args, **kwargs):
+        if not no_priority_update:
+            i = 0
+            for screen_field in ScreenField.objects.filter(screen=self.screen, priority__lt=self.priority).exclude(
+                pk=self.pk
+            ):
+                screen_field.priority = i
+                screen_field.save(*args, **kwargs, no_priority_update=True)
+                i += 1
+            self.priority = i
+            i += 1
+            for screen_field in ScreenField.objects.filter(screen=self.screen, priority__gte=self.priority).exclude(
+                pk=self.pk
+            ):
+                screen_field.priority = i
+                screen_field.save(*args, **kwargs, no_priority_update=True)
+                i += 1
+
+        return super().save(*args, **kwargs)

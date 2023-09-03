@@ -73,8 +73,10 @@ class TaskEventSerializer(serializers.ModelSerializer):
         model = TaskEvent
         fields = (
             "id",
-            "name",
+            "type",
+            "old_field",
             "old_value",
+            "new_field",
             "new_value",
             "user",
             "created",
@@ -112,3 +114,7 @@ class LinkSerializer(serializers.ModelSerializer):
             "dest_task",
             "created",
         )
+
+
+class TransitTaskSerializer(serializers.Serializer):
+    transition_id = serializers.IntegerField()

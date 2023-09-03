@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from shark_task_core.link_manager import LinkManager
-from shark_task_core.models import LinkType, TaskEvent
+from shark_task_core.models import LinkType, Task, TaskEvent
 from shark_task_core.serializers import (
     CreateLinkSerializer,
     CreateTaskSerializer,
@@ -14,9 +14,14 @@ from shark_task_core.serializers import (
     ShortTaskSerializer,
     TaskEventSerializer,
     TaskSerializer,
+    TransitTaskSerializer,
     UpdateTaskSerializer,
 )
 from shark_task_core.task_manager import CreateTaskInfo, TaskManager, UpdateTaskInfo
+from shark_task_fields.models import ScreenField
+from shark_task_fields.serializers import ScreenFieldSerializer
+from shark_task_workflow.models import Transition
+from shark_task_workflow.serializers import TransitionSerializer
 
 
 class TaskView(APIView):
@@ -79,6 +84,22 @@ def get_task_events(request, task_id: int):
     return Response(TaskEventSerializer(TaskEvent.objects.filter(task_id=task_id).order_by("-created"), many=True).data)
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_task_fields(request, task_id: int):
+    task = Task.objects.select_related("project_schema").get(pk=task_id)
+    screen_fields = ScreenField.objects.filter(screen_id=task.project_schema.screen_id).order_by("priority")
+    return Response(ScreenFieldSerializer(screen_fields, many=True).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_task_workflow(request, task_id: int):
+    task = Task.objects.select_related("project_schema").get(pk=task_id)
+    transitions = Transition.objects.filter(workflow_id=task.project_schema.workflow_id)
+    return Response(TransitionSerializer(transitions, many=True).data)
+
+
 class LinkTypeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -103,7 +124,22 @@ class LinkView(APIView):
         return Response(f"Link with id {link_id} deleted")
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def transit_task(request, task_id: int, transition_id: int):
-    return Response(TaskEventSerializer(TaskEvent.objects.filter(task_id=task_id).order_by("-created"), many=True).data)
+class TransitTaskView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, task_id):
+        try:
+            serializer = TransitTaskSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            task_manager = TaskManager()
+            task_manager.transit(task_id, serializer.data["transition_id"], request.user)
+            task_info = task_manager.get(task_id)
+            return Response(TaskSerializer(task_info.dict()).data)
+        except Exception as e:
+            print(e)
+            raise e
+
+    def get(self, request, task_id):
+        task_manager = TaskManager()
+        transitions = task_manager.get_transitions(task_id)
+        return Response(TransitionSerializer(transitions, many=True).data)

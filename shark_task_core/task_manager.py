@@ -3,17 +3,27 @@ from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from pydantic.main import BaseModel
 
-from shark_task_core.const import TaskEventName
-from shark_task_core.models import FieldValue, Link, Project, ProjectSchema, Task, TaskEvent
+from shark_task_core.models import (
+    FieldValue,
+    Link,
+    Project,
+    ProjectSchema,
+    Task,
+    TaskEvent,
+    TaskEventType,
+)
 from shark_task_fields.models import Field, Screen
+from shark_task_fields.serializers import ShortFieldSerializer
 from shark_task_workflow.models import Status, Transition
+from shark_task_workflow.serializers import StatusSerializer
 
 User = get_user_model()
 
 
-class FieldInfo(BaseModel):
+class FieldValueInfo(BaseModel):
     id: int
     value: Optional[dict]
 
@@ -22,7 +32,7 @@ class CreateTaskInfo(BaseModel):
     project_id: int
     task_type_id: int
     summary: str
-    fields: list[FieldInfo]
+    fields: list[FieldValueInfo]
 
     class Config:
         arbitrary_types_allowed = True
@@ -30,7 +40,7 @@ class CreateTaskInfo(BaseModel):
 
 class UpdateTaskInfo(BaseModel):
     summary: Optional[str]
-    fields: list[FieldInfo]
+    fields: list[FieldValueInfo]
 
     class Config:
         arbitrary_types_allowed = True
@@ -67,7 +77,7 @@ class TaskInfo(BaseModel):
     status: Status
     key: str
     task_num: int
-    fields: list[FieldInfo]
+    fields: list[FieldValueInfo]
     inward_links: list[LinkInfo]
     outward_links: list[LinkInfo]
     created: datetime
@@ -99,7 +109,7 @@ class TaskManager:
                 status=initial_status,
                 creator=user,
             )
-            TaskEvent.objects.create(task=task, name=TaskEventName.TASK_CREATED, user=user)
+            TaskEvent.objects.create(task=task, type=TaskEventType.TASK_CREATED, user=user)
 
             for field_info in task_info.fields:
                 field = Field.objects.select_related("field_type").get(pk=field_info.id)
@@ -125,15 +135,16 @@ class TaskManager:
                 task_events.append(
                     TaskEvent(
                         task=task,
-                        name=TaskEventName.SUMMARY_UPDATED,
-                        old_value=old_summary,
-                        new_value=task_info.summary,
+                        type=TaskEventType.SUMMARY_UPDATED,
+                        old_value={"summary", old_summary},
+                        new_value={"summary", task_info.summary},
                         user=user,
                     )
                 )
 
             for field_info in task_info.fields:
                 field_value, _ = FieldValue.objects.get_or_create(task=task, field_id=field_info.id)
+                field = Field.objects.get(pk=field_info.id)
                 old_value = field_value.value
                 field_value.value = field_info.value
                 field_value.save()
@@ -141,7 +152,8 @@ class TaskManager:
                 task_events.append(
                     TaskEvent(
                         task=task,
-                        name=TaskEventName.TASK_UPDATED,
+                        type=TaskEventType.TASK_UPDATED,
+                        field=ShortFieldSerializer(field).data,
                         old_value=old_value,
                         new_value=field_info.value,
                         user=user,
@@ -222,25 +234,50 @@ class TaskManager:
     def generate_task_key(self, project: Project, task_num: int) -> str:
         return f"{project.key}-{task_num}"
 
-    def _get_field_info_list(self, project_schema: ProjectSchema, task: Task) -> list[FieldInfo]:
+    def get_transitions(self, task_id: int) -> list[Transition]:
+        task = Task.objects.select_related("project_schema").get(pk=task_id)
+        return self._get_out_transitions_query_set(task)
+
+    def transit(self, task_id: int, transition_id: int, user: User) -> None:
+        with transaction.atomic():
+            task = Task.objects.select_related("status", "project_schema").get(pk=task_id)
+            transition = self._get_out_transitions_query_set(task).get(pk=transition_id)
+            TaskEvent.objects.create(
+                task=task,
+                type=TaskEventType.STATUS_UPDATED,
+                user=user,
+                old_value=StatusSerializer(task.status).data,
+                new_value=StatusSerializer(transition.dest_status).data,
+            )
+            task.status = transition.dest_status
+            task.save()
+
+    def _get_out_transitions_query_set(self, task: Task) -> list[Transition]:
+        return (
+            Transition.objects.filter(workflow_id=task.project_schema.workflow_id)
+            .filter(Q(src_status_id=task.status_id) | Q(src_status_id__isnull=True))
+            .exclude(is_initial=True)
+        )
+
+    def _get_field_info_list(self, project_schema: ProjectSchema, task: Task) -> list[FieldValueInfo]:
         field_value_storage: dict[int, dict] = {
             field_value.field.pk: field_value.value
             for field_value in FieldValue.objects.select_related("field").filter(task=task, value__isnull=False)
         }
 
-        field_info_list: list[FieldInfo] = []
+        field_info_list: list[FieldValueInfo] = []
         for field in project_schema.screen.fields.all():
-            field_info_list.append(FieldInfo(id=field.pk, value=field_value_storage.get(field.pk)))
+            field_info_list.append(FieldValueInfo(id=field.pk, value=field_value_storage.get(field.pk)))
         return field_info_list
 
-    def _validate_field_info_list_during_creation(self, screen: Screen, field_info_list: list[FieldInfo]) -> None:
+    def _validate_field_info_list_during_creation(self, screen: Screen, field_info_list: list[FieldValueInfo]) -> None:
         required_field_storage = self._get_required_field_storage(screen)
         filled_field_id_set = {field_info.id for field_info in field_info_list if field_info.value is not None}
         for _, required_field in required_field_storage.items():
             if required_field.pk not in filled_field_id_set:
                 raise ValueError(f"Field {required_field.name} is required")
 
-    def _validate_field_info_list_during_update(self, screen: Screen, field_info_list: list[FieldInfo]) -> None:
+    def _validate_field_info_list_during_update(self, screen: Screen, field_info_list: list[FieldValueInfo]) -> None:
         required_field_storage = self._get_required_field_storage(screen)
 
         for field_info in field_info_list:
