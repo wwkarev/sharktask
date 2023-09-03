@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from jsonschema.exceptions import ValidationError
 
+from shark_task_core.const import TASK_EVENT_LISTENERS_JSON_SCHEMA
 from shark_task_fields.models import Field, Screen
 from shark_task_workflow.models import Status, Workflow
 
@@ -32,6 +33,7 @@ class ProjectSchema(models.Model):
     task_type = models.ForeignKey(TaskType, related_name="project_task_schemas", on_delete=models.PROTECT)
     screen = models.ForeignKey(Screen, related_name="project_task_schemas", on_delete=models.PROTECT)
     workflow = models.ForeignKey(Workflow, related_name="project_task_schemas", on_delete=models.PROTECT)
+    event_listeners = models.JSONField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
@@ -45,6 +47,14 @@ class ProjectSchema(models.Model):
             raise ValueError("Only one active project schema for project and task_type could be exist")
         if not self.is_active and Task.objects.filter(project_schema_id=self.pk).exists():
             raise ValueError("You cannot deactivate project schema with linked tasks")
+        if self.event_listeners:
+            try:
+                jsonschema.validate(self.event_listeners, TASK_EVENT_LISTENERS_JSON_SCHEMA)
+            except ValidationError as e:
+                logger = logging.getLogger()
+                logger.error(e)
+                print(e)
+                raise ValueError("Invalid event listener schema")
         return super().save(*args, **kwargs)
 
 

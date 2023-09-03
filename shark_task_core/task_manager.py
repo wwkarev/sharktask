@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -15,6 +16,7 @@ from shark_task_core.models import (
     TaskEvent,
     TaskEventType,
 )
+from shark_task_core.utils import Condition, EventListener, Postfunction, create_instance
 from shark_task_fields.models import Field, Screen
 from shark_task_fields.serializers import ShortFieldSerializer
 from shark_task_workflow.models import Status, Transition
@@ -109,11 +111,13 @@ class TaskManager:
                 status=initial_status,
                 creator=user,
             )
-            TaskEvent.objects.create(task=task, type=TaskEventType.TASK_CREATED, user=user)
+            task_event = TaskEvent.objects.create(task=task, type=TaskEventType.TASK_CREATED, user=user)
 
             for field_info in task_info.fields:
                 field = Field.objects.select_related("field_type").get(pk=field_info.id)
                 FieldValue.objects.create(task=task, field=field, value=field_info.value)
+
+            self._notify_task_subscribers(task, [task_event], user, project_schema.event_listeners)
 
             return self._get(task)
 
@@ -136,8 +140,8 @@ class TaskManager:
                     TaskEvent(
                         task=task,
                         type=TaskEventType.SUMMARY_UPDATED,
-                        old_value={"summary", old_summary},
-                        new_value={"summary", task_info.summary},
+                        old_value={"summary": old_summary},
+                        new_value={"summary": task_info.summary},
                         user=user,
                     )
                 )
@@ -164,6 +168,8 @@ class TaskManager:
 
             task.updated = datetime.now()
             task.save()
+
+            self._notify_task_subscribers(task, task_events, user, project_schema.event_listeners)
 
         return self._get(task)
 
@@ -234,15 +240,26 @@ class TaskManager:
     def generate_task_key(self, project: Project, task_num: int) -> str:
         return f"{project.key}-{task_num}"
 
-    def get_transitions(self, task_id: int) -> list[Transition]:
+    def get_transitions(self, task_id: int, user: User) -> list[Transition]:
         task = Task.objects.select_related("project_schema").get(pk=task_id)
-        return self._get_out_transitions_query_set(task)
+        out_transitions = list(
+            filter(
+                lambda transition: self._check_transition(task, user, transition),
+                self._get_out_transitions_query_set(task),
+            )
+        )
+        return out_transitions
 
     def transit(self, task_id: int, transition_id: int, user: User) -> None:
         with transaction.atomic():
             task = Task.objects.select_related("status", "project_schema").get(pk=task_id)
             transition = self._get_out_transitions_query_set(task).get(pk=transition_id)
-            TaskEvent.objects.create(
+            if not self._check_transition(task, user, transition):
+                raise ValueError(f"Condition check failed for transition with id {transition_id}")
+
+            self._execute_postfucntions(task, user, transition, is_pre_transit=True)
+
+            task_event = TaskEvent.objects.create(
                 task=task,
                 type=TaskEventType.STATUS_UPDATED,
                 user=user,
@@ -252,12 +269,62 @@ class TaskManager:
             task.status = transition.dest_status
             task.save()
 
+            self._execute_postfucntions(task, user, transition, is_pre_transit=False)
+
+            self._notify_task_subscribers(task, [task_event], user, task.project_schema.event_listeners)
+
     def _get_out_transitions_query_set(self, task: Task) -> list[Transition]:
         return (
             Transition.objects.filter(workflow_id=task.project_schema.workflow_id)
             .filter(Q(src_status_id=task.status_id) | Q(src_status_id__isnull=True))
             .exclude(is_initial=True)
         )
+
+    def _check_transition(self, task: Task, user: User, transition: Transition) -> bool:
+        is_checked = True
+        if condition_info_list := transition.conditions:
+            condition_info_list = sorted(condition_info_list, key=lambda x: x["priority"])
+            for condition_info in condition_info_list:
+                condition: Condition = create_instance(
+                    condition_info["class"], condition_info.get("args", []), condition_info.get("kwargs", {})
+                )
+                is_checked = condition.is_active(task, user)
+        return is_checked
+
+    def _execute_postfucntions(self, task: Task, user: User, transition: Transition, is_pre_transit: bool) -> None:
+        try:
+            if postfunction_info_list := transition.postfunctions:
+                filtered_postfunction_info_list = []
+                for postfunction_info in postfunction_info_list:
+                    if is_pre_transit and postfunction_info["priority"] < 0:
+                        filtered_postfunction_info_list.append(postfunction_info)
+                    elif not is_pre_transit and postfunction_info["priority"] >= 0:
+                        filtered_postfunction_info_list.append(postfunction_info)
+                filtered_postfunction_info_list = sorted(filtered_postfunction_info_list, key=lambda x: x["priority"])
+                for postfunction_info in filtered_postfunction_info_list:
+                    postfunction: Postfunction = create_instance(
+                        postfunction_info["class"],
+                        postfunction_info.get("args", []),
+                        postfunction_info.get("kwargs", {}),
+                    )
+                    postfunction.execute(task, user)
+        except Exception as e:
+            logger = logging.getLogger()
+            logger.error(e)
+            print(e)
+
+    def _notify_task_subscribers(
+        self, task: Task, task_events: list[TaskEvent], user: User, event_listener_info_list: Optional[list[dict]]
+    ) -> None:
+        if event_listener_info_list:
+            event_listener_info_list = sorted(event_listener_info_list, key=lambda x: x["priority"])
+            for event_listener_info in event_listener_info_list:
+                event_listener: EventListener = create_instance(
+                    event_listener_info["class"],
+                    event_listener_info.get("args", []),
+                    event_listener_info.get("kwargs", {}),
+                )
+                event_listener.notify(task, task_events, user)
 
     def _get_field_info_list(self, project_schema: ProjectSchema, task: Task) -> list[FieldValueInfo]:
         field_value_storage: dict[int, dict] = {

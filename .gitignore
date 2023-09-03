@@ -30,6 +30,7 @@ venv.bak/
 logs
 
 scripts/
+conditions/
 
 # testing
 .mypy_cache/

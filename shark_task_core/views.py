@@ -141,5 +141,5 @@ class TransitTaskView(APIView):
 
     def get(self, request, task_id):
         task_manager = TaskManager()
-        transitions = task_manager.get_transitions(task_id)
+        transitions = task_manager.get_transitions(task_id, request.user)
         return Response(TransitionSerializer(transitions, many=True).data)
