@@ -22,5 +22,5 @@ urlpatterns = [
     path("token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("admin/", admin.site.urls),
-    path("core/", include("shark_task_core.urls")),
+    path("core/", include("django_shark_task.urls")),
 ]

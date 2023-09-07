@@ -2,7 +2,7 @@ import importlib
 
 from django.contrib.auth import get_user_model
 
-from shark_task_core.models import Task, TaskEvent
+from django_shark_task.task.models import Task, TaskEvent
 
 User = get_user_model()
 

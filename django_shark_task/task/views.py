@@ -3,9 +3,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shark_task_core.link_manager import LinkManager
-from shark_task_core.models import LinkType, Task, TaskEvent
-from shark_task_core.serializers import (
+from django_shark_task.fields.models import ScreenField
+from django_shark_task.fields.serializers import ScreenFieldSerializer
+from django_shark_task.task.link_manager import LinkManager
+from django_shark_task.task.models import LinkType, Task, TaskEvent
+from django_shark_task.task.serializers import (
     CreateLinkSerializer,
     CreateTaskSerializer,
     LinkSerializer,
@@ -17,11 +19,9 @@ from shark_task_core.serializers import (
     TransitTaskSerializer,
     UpdateTaskSerializer,
 )
-from shark_task_core.task_manager import CreateTaskInfo, TaskManager, UpdateTaskInfo
-from shark_task_fields.models import ScreenField
-from shark_task_fields.serializers import ScreenFieldSerializer
-from shark_task_workflow.models import Transition
-from shark_task_workflow.serializers import TransitionSerializer
+from django_shark_task.task.task_manager import CreateTaskInfo, TaskManager, UpdateTaskInfo
+from django_shark_task.workflow.models import Transition
+from django_shark_task.workflow.serializers import TransitionSerializer
 
 
 class TaskView(APIView):
@@ -33,7 +33,6 @@ class TaskView(APIView):
             serializer.is_valid(raise_exception=True)
             task_manager = TaskManager()
             create_task_info = CreateTaskInfo(**serializer.data)
-            print(create_task_info)
             task_info = task_manager.create(create_task_info, request.user)
             return Response(TaskSerializer(task_info.dict()).data)
         except Exception as e:
@@ -46,7 +45,6 @@ class TaskView(APIView):
             serializer.is_valid(raise_exception=True)
             task_manager = TaskManager()
             update_task_info = UpdateTaskInfo(**serializer.data)
-            print(update_task_info)
             task_info = task_manager.update(task_id, update_task_info, request.user)
             return Response(TaskSerializer(task_info.dict()).data)
         except Exception as e:
@@ -55,13 +53,13 @@ class TaskView(APIView):
 
     def get(self, request, task_id):
         task_manager = TaskManager()
-        task_info = task_manager.get(task_id)
+        task_info = task_manager.get(task_id, request.user)
         return Response(TaskSerializer(task_info.dict()).data)
 
     def delete(self, request, task_id):
         try:
             task_manager = TaskManager()
-            task_manager.delete(task_id)
+            task_manager.delete(task_id, request.user)
             return Response(f"Task with id {task_id} deleted")
         except Exception as e:
             print(e)

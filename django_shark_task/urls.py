@@ -1,6 +1,6 @@
 from django.urls import path
 
-from shark_task_core.views import (
+from django_shark_task.task.views import (
     LinkTypeView,
     LinkView,
     TaskView,

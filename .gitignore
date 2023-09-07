@@ -16,6 +16,9 @@ pyrightconfig.json
 *.sqlite3
 db_data/
 
+dist/
+django_shark_task.egg-info/
+
 # Environments
 .env
 .envrc

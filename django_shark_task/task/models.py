@@ -2,12 +2,13 @@ import logging
 
 import jsonschema
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db import models
 from jsonschema.exceptions import ValidationError
 
-from shark_task_core.const import TASK_EVENT_LISTENERS_JSON_SCHEMA
-from shark_task_fields.models import Field, Screen
-from shark_task_workflow.models import Status, Workflow
+from django_shark_task.fields.models import Field, Screen
+from django_shark_task.task.const import TASK_EVENT_LISTENERS_JSON_SCHEMA
+from django_shark_task.workflow.models import Status, Workflow
 
 User = get_user_model()
 
@@ -34,6 +35,15 @@ class ProjectSchema(models.Model):
     screen = models.ForeignKey(Screen, related_name="project_task_schemas", on_delete=models.PROTECT)
     workflow = models.ForeignKey(Workflow, related_name="project_task_schemas", on_delete=models.PROTECT)
     event_listeners = models.JSONField(null=True, blank=True)
+    groups_with_read_permission = models.ManyToManyField(
+        Group, related_name="project_schemas_with_read_permission", blank=True
+    )
+    groups_with_write_permission = models.ManyToManyField(
+        Group, related_name="project_schemas_with_write_permission", blank=True
+    )
+    groups_with_delete_permission = models.ManyToManyField(
+        Group, related_name="project_schemas_with_delete_permission", blank=True
+    )
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 

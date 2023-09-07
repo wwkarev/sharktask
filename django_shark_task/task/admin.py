@@ -1,7 +1,7 @@
 from django.contrib import admin
 
-from shark_task_core import models
-from shark_task_utils.admin_utils import CustomChoiceField, get_label, get_linked_value
+from django_shark_task.task import models
+from django_shark_task.utils.admin_utils import CustomChoiceField, get_label, get_linked_value
 
 
 @admin.register(models.Project)

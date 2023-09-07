@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from shark_task_workflow.models import Status, StatusType, Transition
+from django_shark_task.workflow.models import Status, StatusType, Transition
 
 
 class StatusTypeSerializer(serializers.ModelSerializer):

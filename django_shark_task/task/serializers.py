@@ -1,8 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from shark_task_core.models import Link, LinkType, TaskEvent
-from shark_task_workflow.serializers import StatusSerializer
+from django_shark_task.task.models import Link, LinkType, TaskEvent
+from django_shark_task.workflow.serializers import StatusSerializer
 
 User = get_user_model()
 

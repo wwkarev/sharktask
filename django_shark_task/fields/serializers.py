@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from shark_task_fields.models import Field, FieldType, ScreenField
+from django_shark_task.fields.models import Field, FieldType, ScreenField
 
 
 class FieldTypeSerializer(serializers.ModelSerializer):

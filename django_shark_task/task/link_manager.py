@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from shark_task_core.models import Link, Task, TaskEvent, TaskEventType
+from django_shark_task.task.models import Link, Task, TaskEvent, TaskEventType
 
 User = get_user_model()
 

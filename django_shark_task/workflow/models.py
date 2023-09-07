@@ -4,7 +4,7 @@ import jsonschema
 from django.db import models
 from jsonschema.exceptions import ValidationError
 
-from shark_task_workflow.const import (
+from django_shark_task.workflow.const import (
     TRANSITION_CONDITIONS_JSON_SCHEMA,
     TRANSITION_POSTFUNCIONS_JSON_SCHEMA,
 )

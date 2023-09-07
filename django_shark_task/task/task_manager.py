@@ -7,7 +7,9 @@ from django.db import transaction
 from django.db.models import Q
 from pydantic.main import BaseModel
 
-from shark_task_core.models import (
+from django_shark_task.fields.models import Field, Screen
+from django_shark_task.fields.serializers import ShortFieldSerializer
+from django_shark_task.task.models import (
     FieldValue,
     Link,
     Project,
@@ -16,11 +18,10 @@ from shark_task_core.models import (
     TaskEvent,
     TaskEventType,
 )
-from shark_task_core.utils import Condition, EventListener, Postfunction, create_instance
-from shark_task_fields.models import Field, Screen
-from shark_task_fields.serializers import ShortFieldSerializer
-from shark_task_workflow.models import Status, Transition
-from shark_task_workflow.serializers import StatusSerializer
+from django_shark_task.task.permission_manager import PermissionManager
+from django_shark_task.utils.utils import Condition, EventListener, Postfunction, create_instance
+from django_shark_task.workflow.models import Status, Transition
+from django_shark_task.workflow.serializers import StatusSerializer
 
 User = get_user_model()
 
@@ -90,13 +91,23 @@ class TaskInfo(BaseModel):
 
 
 class TaskManager:
+    def __init__(self):
+        self._permission_manager = PermissionManager()
+
     def create(self, task_info: CreateTaskInfo, user: User) -> TaskInfo:
         with transaction.atomic():
             project_schema = (
                 ProjectSchema.objects.select_related("project", "screen")
-                .prefetch_related("screen__fields__screen_field_schemas")
+                .prefetch_related(
+                    "groups_with_read_permission",
+                    "groups_with_write_permission",
+                    "groups_with_delete_permission",
+                    "screen__fields__screen_field_schemas",
+                )
                 .get(project_id=task_info.project_id, task_type_id=task_info.task_type_id, is_active=True)
             )
+            self._permission_manager.check_write_permissions(user, project_schema)
+
             project = project_schema.project
             self._validate_field_info_list_during_creation(project_schema.screen, task_info.fields)
 
@@ -126,10 +137,16 @@ class TaskManager:
             task = (
                 Task.objects.select_related("status")
                 .select_related("project_schema__project")
-                .prefetch_related("project_schema__screen__fields")
+                .prefetch_related(
+                    "project_schema__screen__fields",
+                    "project_schema__groups_with_read_permission",
+                    "project_schema__groups_with_write_permission",
+                    "project_schema__groups_with_delete_permission",
+                )
                 .get(pk=task_id)
             )
             project_schema = task.project_schema
+            self._permission_manager.check_write_permissions(user, project_schema)
             self._validate_field_info_list_during_update(project_schema.screen, task_info.fields)
 
             task_events: list[TaskEvent] = []
@@ -173,19 +190,31 @@ class TaskManager:
 
         return self._get(task)
 
-    def delete(self, task_id: int) -> None:
+    def delete(self, task_id: int, user: User) -> None:
         with transaction.atomic():
+            task = Task.objects.prefetch_related(
+                "project_schema__groups_with_read_permission",
+                "project_schema__groups_with_write_permission",
+                "project_schema__groups_with_delete_permission",
+            ).get(pk=task_id)
+            self._permission_manager.check_delete_permissions(user, task.project_schema)
             TaskEvent.objects.filter(task_id=task_id).delete()
             FieldValue.objects.filter(task_id=task_id).delete()
-            Task.objects.get(pk=task_id).delete()
+            task.delete()
 
-    def get(self, task_id: int) -> TaskInfo:
+    def get(self, task_id: int, user: User) -> TaskInfo:
         task = (
             Task.objects.select_related("status")
             .select_related("project_schema__project")
-            .prefetch_related("project_schema__screen__fields")
+            .prefetch_related(
+                "project_schema__screen__fields",
+                "project_schema__groups_with_read_permission",
+                "project_schema__groups_with_write_permission",
+                "project_schema__groups_with_delete_permission",
+            )
             .get(pk=task_id)
         )
+        self._permission_manager.check_delete_permissions(user, task.project_schema)
         return self._get(task)
 
     def filter_task(self, project_id: int) -> list[ShortTaskInfo]:
